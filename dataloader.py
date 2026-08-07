@@ -17,54 +17,27 @@ def _collate_images(images: List[Any]):
     return list(images)
 
 
-def _collate_text(texts: List[Any], pad_value: int = 0):
+def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Batch a list of text fields.
-    - If str -> return list[str] as-is (tokenize later, e.g. inside the
-      training loop with a HuggingFace tokenizer).
-    - If list[int] or 1-D Tensor (already tokenized) -> pad to the same
-      length and return a Tensor [batch, max_len].
+    Collate a list of samples (dicts) from OpenViVQADataset into a batch.
+ 
+    - "image"            -> Tensor [B, C, H, W] if transformed, else list[PIL.Image]
+    - "question"/"answer" -> list[str] (raw text, no padding)
+    - everything else     -> list as-is (question_id, image_id, filename, ...)
     """
-    if len(texts) == 0:
-        return texts
-
-    first = texts[0]
-    if isinstance(first, str):
-        return list(texts)
-
-    if isinstance(first, (list, tuple)):
-        tensors = [torch.as_tensor(t, dtype=torch.long) for t in texts]
-        return pad_sequence(tensors, batch_first=True, padding_value=pad_value)
-
-    if torch.is_tensor(first):
-        tensors = [t.long() for t in texts]
-        return pad_sequence(tensors, batch_first=True, padding_value=pad_value)
-
-    # some other type (e.g. dict returned by a HF tokenizer) -> leave as list
-    return list(texts)
-
-
-def make_collate_fn(pad_value: int = 0) -> Callable:
-    """Returns a collate_fn for use with DataLoader, with a configurable pad_value."""
-
-    def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
-        collated: Dict[str, Any] = {}
-        keys = batch[0].keys()
-
-        for key in keys:
-            values = [sample[key] for sample in batch]
-
-            if key == "image":
-                collated[key] = _collate_images(values)
-            elif key in ("question", "answer"):
-                collated[key] = _collate_text(values, pad_value=pad_value)
-            else:
-                # question_id, image_id, filename, ...
-                collated[key] = list(values)
-
-        return collated
-
-    return collate_fn
+    collated: Dict[str, Any] = {}
+    keys = batch[0].keys()
+ 
+    for key in keys:
+        values = [sample[key] for sample in batch]
+ 
+        if key == "image":
+            collated[key] = _collate_images(values)
+        else:
+            # question, answer, question_id, image_id, filename, ...
+            collated[key] = list(values)
+ 
+    return collated
 
 
 def get_dataloader(
@@ -104,8 +77,6 @@ def get_dataloader(
         tokenizer=tokenizer,
         is_test=is_test,
     )
-
-    collate_fn = make_collate_fn(pad_value=pad_value)
 
     return DataLoader(
         dataset,
