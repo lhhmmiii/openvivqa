@@ -1,5 +1,6 @@
+import sys
 from pathlib import Path
-
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 import torch
 import torch.optim as optim
 from transformers import AutoTokenizer
@@ -52,7 +53,7 @@ def tokenize_questions(
         return_tensors="pt",
     )
 
-    return encoding["input_ids"].to(device),
+    return encoding["input_ids"].to(device)
 
 
 def tokenize_answers(
@@ -105,16 +106,15 @@ def train_one_epoch(
     total_loss = 0.0
 
     for batch in train_loader:
-        images = batch["images"].to(device)
-        questions = batch["questions"]  # list[str]
-        answers = batch["answers"]      # list[str]
+        images = batch["image"].to(device)
+        questions = batch["question"]  # list[str]
+        answers = batch["answer"]      # list[str]
 
         # Tokenize questions and answers
         question_input_ids = tokenize_questions(questions, device)
         answer_input_ids, answer_target_ids = tokenize_answers(answers, device)
-
         # Forward
-        logits = model(images=images, question_tokens=question_input_ids, answer_input_ids=answer_input_ids)
+        logits = model(images, question_input_ids, answer_input_ids)
 
         # Compute loss 
         loss = criterion(
@@ -124,9 +124,7 @@ def train_one_epoch(
 
         # Backpropagation
         optimizer.zero_grad(set_to_none=True)
-
         loss.backward()
-
         optimizer.step()
 
         total_loss += loss.item()
@@ -150,20 +148,16 @@ def validate(
 
     for batch in val_loader:
 
-        images = batch["images"].to(device)
-        questions = batch["questions"]
-        answers = batch["answers"]
+        images = batch["image"].to(device)
+        questions = batch["question"]
+        answers = batch["answer"]
 
         # Tokenize
         question_input_ids = tokenize_questions(questions, device)
         answer_input_ids, answer_target_ids = tokenize_answers(answers, device)
 
         # Forward
-        logits = model(
-            images=images,
-            question_tokens=question_input_ids,
-            answer_input_ids=answer_input_ids,
-        )
+        logits = model(images, question_input_ids, answer_input_ids)
 
         # Loss
         loss = criterion(
@@ -207,8 +201,8 @@ def main():
         is_test=False,
     )
     val_loader = get_dataloader(
-        json_path="datasets/val/vlsp2023_val_data.json",
-        image_dir="datasets/val/validation-images",
+        json_path="datasets/dev/vlsp2023_dev_data.json",
+        image_dir="datasets/dev/dev-images",
         batch_size=BATCH_SIZE,
         shuffle=False,
         transform=image_transform,
