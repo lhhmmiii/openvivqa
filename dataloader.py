@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional, Callable
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import Subset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
 from dataset import OpenViVQADataset
@@ -48,8 +48,8 @@ def get_dataloader(
     num_workers: int = 0,
     transform: Optional[Callable] = None,
     tokenizer: Optional[Callable] = None,
+    max_samples: Optional[int] = None,
     is_test: bool = False,
-    pad_value: int = 0,
     **dataloader_kwargs,
 ) -> DataLoader:
     """
@@ -77,6 +77,9 @@ def get_dataloader(
         tokenizer=tokenizer,
         is_test=is_test,
     )
+    
+    if max_samples is not None:
+        dataset = Subset(dataset, range(min(max_samples, len(dataset))))
 
     return DataLoader(
         dataset,
@@ -118,6 +121,7 @@ if __name__ == "__main__":
         batch_size=16,
         shuffle=False,
         transform=image_transform,
+        max_samples=10,
         is_test=False,
     )
 
