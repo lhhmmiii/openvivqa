@@ -47,7 +47,6 @@ def get_dataloader(
     shuffle: bool = True,
     num_workers: int = 0,
     transform: Optional[Callable] = None,
-    tokenizer: Optional[Callable] = None,
     max_samples: Optional[int] = None,
     is_test: bool = False,
     **dataloader_kwargs,
@@ -62,7 +61,6 @@ def get_dataloader(
             batch_size=32,
             shuffle=True,
             transform=my_image_transform,
-            tokenizer=my_tokenizer,   # can be None
             is_test=False,
         )
         for batch in train_loader:
@@ -74,7 +72,6 @@ def get_dataloader(
         json_path=json_path,
         image_dir=image_dir,
         transform=transform,
-        tokenizer=tokenizer,
         is_test=is_test,
     )
     
