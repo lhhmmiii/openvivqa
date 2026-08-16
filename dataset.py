@@ -14,7 +14,6 @@ class OpenViVQADataset(Dataset):
         json_path: str,
         image_dir: str,
         transform: Optional[Callable] = None,
-        tokenizer: Optional[Callable] = None,
         is_test: bool = False,
         return_image: bool = True,
     ) -> None:
@@ -24,9 +23,6 @@ class OpenViVQADataset(Dataset):
             image_dir: directory containing corresponding images (e.g. datasets/train/training_images)
             transform: image transform function (e.g. torchvision.transforms.Compose(...)).
                        If None, a PIL.Image (RGB) is returned unchanged.
-            tokenizer: callable that takes a text string and returns token ids
-                       (e.g. tokenizer.encode). If None, the raw text (str) is returned.
-                       Applied to both question and answer.
             is_test: if True, the dataset is treated as a test set (no labels available)
             return_image: if False, images will not be loaded (useful when only
                           building text vocabularies; much faster).
@@ -35,7 +31,6 @@ class OpenViVQADataset(Dataset):
         self.json_path = json_path
         self.image_dir = image_dir
         self.transform = transform
-        self.tokenizer = tokenizer
         self.is_test = is_test
         self.return_image = return_image
 
@@ -63,7 +58,6 @@ class OpenViVQADataset(Dataset):
             
             # Get question and answer
             question = ann["question"]
-            answer = ann["answer"] 
 
             if not self.is_test:
                 answer = ann["answer"]
@@ -73,7 +67,7 @@ class OpenViVQADataset(Dataset):
                         "image_id": image_id,
                         "filename": filename,
                         "question": question,
-                        "answer": ann["answer"],
+                        "answer": answer,
                     }
                 )
             else:
@@ -101,15 +95,6 @@ class OpenViVQADataset(Dataset):
 
         if self.return_image:
             item["image"] = self._load_image(item["filename"])
-
-        question = item["question"]
-        if self.tokenizer is not None:
-            item["question"] = self.tokenizer(question)
-
-            if "answer" in item:
-                item["answer"] = self.tokenizer(item["answer"])
-            elif "answers" in item:
-                item["answers"] = [self.tokenizer(a) for a in item["answers"]]
 
         return item
 
