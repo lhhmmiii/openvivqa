@@ -3,8 +3,9 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 import torch
 import torch.optim as optim
-from transformers import AutoTokenizer
+from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as T
+from transformers import AutoTokenizer
 
 from dataloader import get_dataloader
 from models.cnn_lstm import CNN_LSTM
@@ -20,6 +21,11 @@ MAX_QUESTION_LENGTH = 64
 MAX_ANSWER_LENGTH = 64
 
 CHECKPOINT_DIR = Path("checkpoints") 
+
+# ========================================================
+# TensorBoard
+# ========================================================
+writer = SummaryWriter(log_dir="runs/cnn_lstm")
 
 # ============================================================
 # Tokenization
@@ -198,6 +204,7 @@ def main():
         batch_size=BATCH_SIZE,
         shuffle=True,
         transform=image_transform,
+        max_samples = BATCH_SIZE * 5,
         is_test=False,
     )
     val_loader = get_dataloader(
@@ -206,6 +213,7 @@ def main():
         batch_size=BATCH_SIZE,
         shuffle=False,
         transform=image_transform,
+        max_samples = BATCH_SIZE * 5,
         is_test=False,
     )
 
@@ -257,12 +265,21 @@ def main():
             device=device,
         )
 
+        writer.add_scalar("Loss/train", train_loss, epoch)
+        writer.add_scalar(
+            "Learning_Rate",
+            optimizer.param_groups[0]["lr"],
+            epoch,
+        )
+
         val_loss = validate(
             model=model,
             val_loader=val_loader,
             criterion=criterion,
             device=device,
         )
+
+        writer.add_scalar("Loss/val", val_loss, epoch)
 
         print(
             f"Epoch [{epoch + 1}/{NUM_EPOCHS}] "
