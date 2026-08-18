@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import resnet50, ResNet50_Weights
-from transformers import AutoTokenizer
 
 class ImageExtractor(nn.Module):
     def __init__(
@@ -345,29 +344,3 @@ class CNN_LSTM(nn.Module):
             input_token = next_token
 
         return torch.cat(generated, dim=1)  # (B, T)
-
-
-if __name__ == "__main__":
-    # Initialize the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
-    VOCAB_SIZE = tokenizer.vocab_size
-    bos_token_id = tokenizer.bos_token_id
-    eos_token_id = tokenizer.eos_token_id
-
-    model = CNN_LSTM(vocab_size=VOCAB_SIZE, pretrained_backbone=False)
-    print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
-
-    dummy_images = torch.randn(2, 3, 224, 224)
-    dummy_questions = torch.randint(0, VOCAB_SIZE, (2, 12))
-    dummy_answers = torch.randint(0, VOCAB_SIZE, (2, 8))
-
-    logits = model(dummy_images, dummy_questions, dummy_answers)
-    print(f"Logits shape: {logits.shape}")  # (2, 8, 5000)
-
-    generated = model.generate(
-        dummy_images, dummy_questions,
-        bos_token_id=bos_token_id, eos_token_id=eos_token_id, max_len=10,
-    )
-    print(f"Generated shape: {generated.shape}")  # (2, <=11)
-    tokens = [tokenizer.convert_ids_to_tokens(seq.tolist()) for seq in generated]
-    print("Generated tokens:", tokens)

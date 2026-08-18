@@ -1,79 +1,48 @@
+import argparse
 import sys
 from pathlib import Path
 
-# Allow importing modules from project root
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+# Ensure project root is on sys.path so `src` is importable
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import torch
-import torchvision.transforms as T
-
 from PIL import Image
-from transformers import AutoTokenizer
 
-from models.cnn_lstm import CNN_LSTM
-
-
-# ============================================================
-# Configuration
-# ============================================================
-
-TOKENIZER_NAME = "vinai/phobert-base"
-
-CHECKPOINT_PATH = "checkpoints/best.pt"
-
-MAX_QUESTION_LENGTH = 64
-MAX_ANSWER_LENGTH = 64
+from src.data.transforms import get_image_transform
+from src.models import build_model
+from src.tokenization.vqa_tokenizer import VQATokenizer
+from src.utils.config import load_config
+from src.utils.checkpoint import load_checkpoint
 
 
-# ============================================================
-# Load tokenizer
-# ============================================================
-
-tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
-
-BOS_TOKEN_ID = tokenizer.bos_token_id
-EOS_TOKEN_ID = tokenizer.eos_token_id
-
-
-# ============================================================
-# Image preprocessing
-# ============================================================
-
-image_transform = T.Compose(
-    [
-        T.Resize((224, 224)),
-        T.ToTensor(),
-        T.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
-        ),
-    ]
-)
-
-
-# ============================================================
-# Load model
-# ============================================================
-
-def load_model(device):
+def load_model(cfg, vqa_tokenizer, device):
     """
-    Load CNN_LSTM model from checkpoint.
+    Load model from checkpoint.
     """
 
-    vocab_size = len(tokenizer)
-
-    model = CNN_LSTM(
-        vocab_size=vocab_size,
+    model_cfg = cfg["model"]
+    model = build_model(
+        model_cfg["name"],
+        vocab_size=vqa_tokenizer.vocab_size,
+        embedding_dim=model_cfg["embedding_dim"],
+        text_embedding_dim=model_cfg["text_embedding_dim"],
+        text_hidden_dim=model_cfg["text_hidden_dim"],
+        text_num_layers=model_cfg["text_num_layers"],
+        text_dropout=model_cfg["text_dropout"],
+        fusion_hidden_dim=model_cfg["fusion_hidden_dim"],
+        fusion_output_dim=model_cfg["fusion_output_dim"],
+        fusion_dropout=model_cfg["fusion_dropout"],
+        decoder_token_embedding_dim=model_cfg["decoder_token_embedding_dim"],
+        decoder_hidden_dim=model_cfg["decoder_hidden_dim"],
+        decoder_num_layers=model_cfg["decoder_num_layers"],
+        decoder_dropout=model_cfg["decoder_dropout"],
         pretrained_backbone=False,
     )
 
-    checkpoint = torch.load(
-        CHECKPOINT_PATH,
-        map_location=device,
-    )
-
-    model.load_state_dict(
-        checkpoint["model_state_dict"]
+    checkpoint = load_checkpoint(
+        path=cfg["inference"]["checkpoint_path"],
+        model=model,
+        device=device,
     )
 
     model = model.to(device)
@@ -92,62 +61,32 @@ def load_model(device):
     return model
 
 
-# ============================================================
-# Tokenize question
-# ============================================================
-
-def tokenize_question(
-    question: str,
-    device: torch.device,
-):
-    """
-    Convert question string into token IDs.
-
-    Shape:
-        (1, sequence_length)
-    """
-
-    encoding = tokenizer(
-        [question],
-        padding=True,
-        truncation=True,
-        max_length=MAX_QUESTION_LENGTH,
-        return_tensors="pt",
-    )
-
-    question_input_ids = encoding["input_ids"].to(device)
-
-    return question_input_ids
-
-
-# ============================================================
-# Generate answer
-# ============================================================
-
 @torch.no_grad()
 def generate_answer(
     model,
     image,
     question_input_ids,
     device,
+    vqa_tokenizer,
+    max_answer_length,
 ):
     """
     Autoregressively generate an answer.
 
     Starts with BOS token and generates one token
-    at a time until EOS or MAX_ANSWER_LENGTH.
+    at a time until EOS or max_answer_length.
     """
 
     # Start decoder with BOS
     answer_input_ids = torch.tensor(
-        [[BOS_TOKEN_ID]],
+        [[vqa_tokenizer.bos_token_id]],
         dtype=torch.long,
         device=device,
     )
 
     generated_tokens = []
 
-    for _ in range(MAX_ANSWER_LENGTH):
+    for _ in range(max_answer_length):
 
         # Forward pass
         logits = model(
@@ -171,7 +110,7 @@ def generate_answer(
         next_token_id = next_token_id.item()
 
         # Stop when EOS is generated
-        if next_token_id == EOS_TOKEN_ID:
+        if next_token_id == vqa_tokenizer.eos_token_id:
             break
 
         generated_tokens.append(next_token_id)
@@ -192,7 +131,7 @@ def generate_answer(
         )
 
     # Convert token IDs back to text
-    answer = tokenizer.decode(
+    answer = vqa_tokenizer.decode(
         generated_tokens,
         skip_special_tokens=True,
     )
@@ -200,15 +139,14 @@ def generate_answer(
     return answer.strip()
 
 
-# ============================================================
-# Inference
-# ============================================================
-
 def predict(
     model,
-    image_path: str,
-    question: str,
+    image_path,
+    question,
     device,
+    vqa_tokenizer,
+    image_transform,
+    max_answer_length,
 ):
     """
     Run VQA inference for one image + question.
@@ -232,7 +170,7 @@ def predict(
     # Tokenize question
     # --------------------------------------------------------
 
-    question_input_ids = tokenize_question(
+    question_input_ids = vqa_tokenizer.tokenize_question(
         question,
         device,
     )
@@ -246,16 +184,36 @@ def predict(
         image=image,
         question_input_ids=question_input_ids,
         device=device,
+        vqa_tokenizer=vqa_tokenizer,
+        max_answer_length=max_answer_length,
     )
 
     return answer
 
 
-# ============================================================
-# Main
-# ============================================================
-
 def main():
+    parser = argparse.ArgumentParser(description="Run VQA inference")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/cnn_lstm.yml",
+        help="Path to the YAML config file",
+    )
+    parser.add_argument(
+        "--image",
+        type=str,
+        default="datasets/test/test-images/000000000005.jpg",
+        help="Path to the input image",
+    )
+    parser.add_argument(
+        "--question",
+        type=str,
+        default="Biển ghi gì? Gợi ý có chữ Kem",
+        help="Question to ask about the image",
+    )
+    args = parser.parse_args()
+
+    cfg = load_config(args.config)
 
     device = torch.device(
         "cuda" if torch.cuda.is_available() else "cpu"
@@ -264,18 +222,26 @@ def main():
     print(f"Device: {device}")
 
     # --------------------------------------------------------
+    # Tokenizer
+    # --------------------------------------------------------
+
+    vqa_tokenizer = VQATokenizer(
+        tokenizer_name=cfg["data"]["tokenizer_name"],
+        max_question_length=cfg["data"]["max_question_length"],
+        max_answer_length=cfg["inference"]["max_answer_length"],
+    )
+
+    # --------------------------------------------------------
+    # Image transform
+    # --------------------------------------------------------
+
+    image_transform = get_image_transform(cfg["data"]["image_size"])
+
+    # --------------------------------------------------------
     # Load model
     # --------------------------------------------------------
 
-    model = load_model(device)
-
-    # --------------------------------------------------------
-    # Input
-    # --------------------------------------------------------
-
-    image_path = "datasets/test/test-images/000000000005.jpg"
-
-    question = "Biển ghi gì? Gợi ý có chữ Kem"
+    model = load_model(cfg, vqa_tokenizer, device)
 
     # --------------------------------------------------------
     # Predict
@@ -283,9 +249,12 @@ def main():
 
     answer = predict(
         model=model,
-        image_path=image_path,
-        question=question,
+        image_path=args.image,
+        question=args.question,
         device=device,
+        vqa_tokenizer=vqa_tokenizer,
+        image_transform=image_transform,
+        max_answer_length=cfg["inference"]["max_answer_length"],
     )
 
     # --------------------------------------------------------
@@ -294,8 +263,8 @@ def main():
 
     print()
     print("=" * 50)
-    print(f"Image:    {image_path}")
-    print(f"Question: {question}")
+    print(f"Image:    {args.image}")
+    print(f"Question: {args.question}")
     print(f"Answer:   {answer}")
     print("=" * 50)
 

@@ -23,3 +23,6 @@ checkpoints/
 
 # Logs
 runs/
+
+# Notebooks
+notebooks/

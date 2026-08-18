@@ -97,12 +97,3 @@ class OpenViVQADataset(Dataset):
             item["image"] = self._load_image(item["filename"])
 
         return item
-
-
-if __name__ == "__main__":
-    ds = OpenViVQADataset(
-        json_path="datasets/dev/vlsp2023_dev_data.json",
-        image_dir="datasets/dev/dev-images",
-    )
-    print("Number of samples:", len(ds))
-    print("First sample:", {k: v for k, v in ds.samples[0].items()})

@@ -1,4 +1,6 @@
 torch
+torchvision
 transformers
 tensorboard
-torchvision
+pyyaml
+Pillow

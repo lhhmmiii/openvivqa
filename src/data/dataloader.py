@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import Subset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
-from dataset import OpenViVQADataset
+from src.data.dataset import OpenViVQADataset
 
 
 def _collate_images(images: List[Any]):
@@ -86,54 +86,3 @@ def get_dataloader(
         collate_fn=collate_fn,
         **dataloader_kwargs,
     )
-
-
-if __name__ == "__main__":
-    # Full usage example for the train / dev / test splits
-    # (adjust the paths to match your own "datasets/..." layout)
-
-    import torchvision.transforms as T
-
-    image_transform = T.Compose(
-        [
-            T.Resize((224, 224)),
-            T.ToTensor(),
-            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
-    )
-
-    # train_loader = get_dataloader(
-    #     json_path="datasets/train/vlsp2023_train_data.json",
-    #     image_dir="datasets/train/training-images",
-    #     batch_size=16,
-    #     shuffle=True,
-    #     transform=image_transform,
-    #     is_test=False,
-    # )
-    
-
-    dev_loader = get_dataloader(
-        json_path="datasets/dev/vlsp2023_dev_data.json",
-        image_dir="datasets/dev/dev-images",
-        batch_size=16,
-        shuffle=False,
-        transform=image_transform,
-        max_samples=10,
-        is_test=False,
-    )
-
-    # test_loader = get_dataloader(
-    #     json_path="datasets/test/vlsp2023_test_data.json",
-    #     image_dir="datasets/test/test-images",
-    #     batch_size=16,
-    #     shuffle=False,
-    #     transform=image_transform,
-    #     is_test=True,
-    # )
-
-    batch = next(iter(dev_loader))
-    print("Batch keys:", batch.keys())
-    print("Images:", batch["image"].shape)
-    print("Number of questions in batch:", len(batch["question"]))
-    print("Example question:", batch["question"][0])
-    print("Example answer:", batch["answer"][0])

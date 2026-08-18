@@ -1,0 +1,44 @@
+# CNN-LSTM model configuration for OpenViVQA
+
+model:
+  name: cnn_lstm
+  vocab_size: null  # auto-detected from tokenizer
+  embedding_dim: 512
+  text_embedding_dim: 300
+  text_hidden_dim: 512
+  text_num_layers: 2
+  text_dropout: 0.5
+  fusion_hidden_dim: 512
+  fusion_output_dim: 512
+  fusion_dropout: 0.2
+  decoder_token_embedding_dim: 300
+  decoder_hidden_dim: 512
+  decoder_num_layers: 1
+  decoder_dropout: 0.2
+  pretrained_backbone: true
+
+data:
+  tokenizer_name: vinai/phobert-base
+  max_question_length: 64
+  max_answer_length: 64
+  image_size: 224
+  train_json: datasets/train/vlsp2023_train_data.json
+  train_image_dir: datasets/train/training-images
+  val_json: datasets/dev/vlsp2023_dev_data.json
+  val_image_dir: datasets/dev/dev-images
+  test_json: datasets/test/vlsp2023_test_data.json
+  test_image_dir: datasets/test/test-images
+
+training:
+  batch_size: 32
+  num_epochs: 10
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-4
+  num_workers: 0
+  max_samples: null  # set to an integer to limit dataset size (for debugging)
+  checkpoint_dir: checkpoints
+  log_dir: runs/cnn_lstm
+
+inference:
+  checkpoint_path: checkpoints/best.pt
+  max_answer_length: 64
