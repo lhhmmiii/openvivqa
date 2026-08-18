@@ -20,3 +20,6 @@ datasets/
 
 # Checkpoint files
 checkpoints/
+
+# Logs
+runs/
