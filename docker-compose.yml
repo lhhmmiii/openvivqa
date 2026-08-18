@@ -1,0 +1,33 @@
+services:
+  training:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: openvivqa-training
+
+    working_dir: /workspace
+
+    volumes:
+      # Mount source code so changes on the host are immediately available
+      - .:/workspace
+
+      # Dataset
+      - ./datasets:/workspace/datasets
+
+      # Save checkpoints outside the container
+      - ./checkpoints:/workspace/checkpoints
+
+      # TensorBoard/logs
+      - ./runs:/workspace/runs
+
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    # NVIDIA GPU
+    gpus: all
+
+    stdin_open: true
+    tty: true
+
+    command: bash
